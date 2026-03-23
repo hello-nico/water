@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class FlowEvent:
         self.task_id = task_id
         self.execution_id = execution_id
         self.data = data or {}
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

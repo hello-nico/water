@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from water.storage.base import FlowSession, FlowStatus, StorageBackend, TaskRun
@@ -84,7 +84,7 @@ class PostgresStorage(StorageBackend):
     # ---- StorageBackend interface ----
 
     async def save_session(self, session: FlowSession) -> None:
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(

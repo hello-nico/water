@@ -1,7 +1,7 @@
 """Cron trigger for schedule-based flow execution."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Callable
 
 from water.triggers.base import Trigger, TriggerEvent
@@ -121,13 +121,13 @@ class CronTrigger(Trigger):
         """Check whether the trigger should fire at the given time.
 
         Args:
-            now: The datetime to check against (defaults to ``datetime.utcnow()``).
+            now: The datetime to check against (defaults to ``datetime.now(timezone.utc)``).
 
         Returns:
             ``True`` if all cron fields match the given time.
         """
         if now is None:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
         parsed = self.parse_schedule()
         return (

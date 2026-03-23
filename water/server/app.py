@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional, Type
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 from water.core.flow import Flow
 from water.observability.dashboard import FlowDashboard
@@ -209,7 +209,7 @@ class FlowServer:
             return {
                 "status": "healthy",
                 "flows_count": len(self.flows),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
         @app.get("/flows", response_model=FlowsListResponse)
@@ -251,9 +251,9 @@ class FlowServer:
             flow = self.flows[flow_id]
 
             try:
-                start_time = datetime.utcnow()
+                start_time = datetime.now(timezone.utc)
                 result = await flow.run(request.input_data)
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
 
                 execution_time_ms = round((end_time - start_time).total_seconds() * 1000, 4)
 

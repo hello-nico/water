@@ -3,7 +3,7 @@ import uuid
 import sqlite3
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -46,8 +46,8 @@ class FlowSession:
         self.context_state = context_state or {}
         self.result = result
         self.error = error
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc)
+        self.updated_at = updated_at or datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -170,7 +170,7 @@ class InMemoryStorage(StorageBackend):
         self._task_runs: Dict[str, List[TaskRun]] = {}
 
     async def save_session(self, session: FlowSession) -> None:
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         self._sessions[session.execution_id] = session
 
     async def get_session(self, execution_id: str) -> Optional[FlowSession]:
@@ -255,7 +255,7 @@ class SQLiteStorage(StorageBackend):
         return conn
 
     async def save_session(self, session: FlowSession) -> None:
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         conn = self._get_conn()
         try:
             conn.execute(

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from water.storage.base import FlowSession, FlowStatus, StorageBackend, TaskRun
@@ -59,7 +59,7 @@ class RedisStorage(StorageBackend):
     # ---- StorageBackend interface ----
 
     async def save_session(self, session: FlowSession) -> None:
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         client = await self._get_client()
         data = json.dumps(session.to_dict())
         key = self._session_key(session.execution_id)

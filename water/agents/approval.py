@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Type
 
@@ -100,7 +100,7 @@ class ApprovalGate:
             action_description=action_description,
             risk_level=risk_level,
             data_summary=data_summary,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         self._requests[request_id] = request
 

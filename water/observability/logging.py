@@ -9,7 +9,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -154,7 +154,7 @@ class StructuredLogger:
         record = {
             "level": level,
             "msg": msg,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             **self._context.to_dict(),
             **kwargs,
         }

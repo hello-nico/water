@@ -11,7 +11,7 @@ import json
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
 
@@ -107,7 +107,7 @@ class A2AMessage:
     """A message in the A2A protocol."""
     role: str  # "user" or "agent"
     parts: List[MessagePart] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> dict:
         return {
@@ -133,8 +133,8 @@ class A2ATask:
     messages: List[A2AMessage] = field(default_factory=list)
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> dict:
         d = {
@@ -242,7 +242,7 @@ class A2AServer:
             result = await self.flow.run(input_data)
             task.state = TaskState.COMPLETED
             task.result = result
-            task.updated_at = datetime.utcnow().isoformat()
+            task.updated_at = datetime.now(timezone.utc).isoformat()
 
             # Add agent response message
             response_parts = [MessagePart.data(result)]
@@ -250,7 +250,7 @@ class A2AServer:
         except Exception as e:
             task.state = TaskState.FAILED
             task.error = str(e)
-            task.updated_at = datetime.utcnow().isoformat()
+            task.updated_at = datetime.now(timezone.utc).isoformat()
 
         return task.to_dict()
 
@@ -267,7 +267,7 @@ class A2AServer:
         if not task:
             raise ValueError(f"Task not found: {task_id}")
         task.state = TaskState.CANCELED
-        task.updated_at = datetime.utcnow().isoformat()
+        task.updated_at = datetime.now(timezone.utc).isoformat()
         return task.to_dict()
 
     @staticmethod
