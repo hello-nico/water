@@ -20,6 +20,28 @@ from typing import Any, Dict, List, Optional
 from water.core.types import SerializableMixin
 
 
+def _parse_iso_utc(iso_str: str) -> datetime:
+    """Parse an ISO 8601 string into a timezone-aware UTC datetime.
+
+    Handles both naive strings (assumes UTC) and aware strings with +00:00.
+    Works on Python 3.8+ (where fromisoformat cannot parse +00:00).
+    """
+    # Strip trailing Z and replace with +00:00 for consistency
+    cleaned = iso_str.replace("Z", "+00:00")
+    # On Python < 3.11, fromisoformat can't parse +00:00; strip it and add tz manually
+    try:
+        dt = datetime.fromisoformat(cleaned)
+    except ValueError:
+        # Remove the timezone suffix and parse as naive
+        if "+" in cleaned:
+            dt = datetime.fromisoformat(cleaned.rsplit("+", 1)[0])
+        else:
+            dt = datetime.fromisoformat(cleaned)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 @dataclass
 class TraceSpan(SerializableMixin):
     """A single span in a trace, representing one task execution."""
@@ -203,8 +225,8 @@ class TraceCollector:
                     span.output_data = result
                     span.completed_at = datetime.now(timezone.utc).isoformat()
                     if span.started_at:
-                        start = datetime.fromisoformat(span.started_at)
-                        end = datetime.fromisoformat(span.completed_at)
+                        start = _parse_iso_utc(span.started_at)
+                        end = _parse_iso_utc(span.completed_at)
                         span.duration_ms = (end - start).total_seconds() * 1000
                     break
             self.store.save(trace)
@@ -217,8 +239,8 @@ class TraceCollector:
         if trace:
             trace.completed_at = datetime.now(timezone.utc).isoformat()
             if trace.started_at:
-                start = datetime.fromisoformat(trace.started_at)
-                end = datetime.fromisoformat(trace.completed_at)
+                start = _parse_iso_utc(trace.started_at)
+                end = _parse_iso_utc(trace.completed_at)
                 trace.duration_ms = (end - start).total_seconds() * 1000
             if error:
                 trace.status = "failed"
