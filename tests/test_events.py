@@ -14,7 +14,7 @@ class NumberOutput(BaseModel):
 @pytest.mark.asyncio
 async def test_event_emitter_basic():
     emitter = EventEmitter()
-    sub = emitter.subscribe()
+    sub = await emitter.subscribe()
     collected = []
 
     async def collect():
@@ -34,8 +34,8 @@ async def test_event_emitter_basic():
 @pytest.mark.asyncio
 async def test_event_emitter_multiple_subscribers():
     emitter = EventEmitter()
-    sub1 = emitter.subscribe()
-    sub2 = emitter.subscribe()
+    sub1 = await emitter.subscribe()
+    sub2 = await emitter.subscribe()
 
     assert emitter.subscriber_count == 2
 
@@ -75,7 +75,7 @@ async def test_flow_events_integration():
     flow.events = emitter
     flow.then(task).register()
 
-    sub = emitter.subscribe()
+    sub = await emitter.subscribe()
 
     async def collect_events():
         async for event in sub:
@@ -97,7 +97,7 @@ async def test_flow_events_integration():
 @pytest.mark.asyncio
 async def test_event_subscription_get():
     emitter = EventEmitter()
-    sub = emitter.subscribe()
+    sub = await emitter.subscribe()
 
     await emitter.emit(FlowEvent("ev1", "f"))
     event = await sub.get(timeout=1.0)
@@ -107,7 +107,7 @@ async def test_event_subscription_get():
     event = await sub.get(timeout=0.05)
     assert event is None
 
-    sub.close()
+    await sub.close()
     assert emitter.subscriber_count == 0
 
 @pytest.mark.asyncio

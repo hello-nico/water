@@ -7,6 +7,7 @@ expensive task executions can be skipped when the same input is seen again.
 
 import hashlib
 import json
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple
@@ -42,6 +43,7 @@ class InMemoryCache(TaskCache):
     def __init__(self) -> None:
         # _store maps key -> (value, expire_at | None)
         self._store: Dict[str, Tuple[Any, Optional[float]]] = {}
+        self._lock = threading.Lock()
 
     # -- internal helpers --------------------------------------------------
 
@@ -58,20 +60,24 @@ class InMemoryCache(TaskCache):
     # -- public API --------------------------------------------------------
 
     def get(self, key: str) -> Optional[Any]:
-        if self._is_expired(key):
-            return None
-        value, _ = self._store[key]
-        return value
+        with self._lock:
+            if self._is_expired(key):
+                return None
+            value, _ = self._store[key]
+            return value
 
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
-        expire_at = (time.monotonic() + ttl) if ttl is not None else None
-        self._store[key] = (value, expire_at)
+        with self._lock:
+            expire_at = (time.monotonic() + ttl) if ttl is not None else None
+            self._store[key] = (value, expire_at)
 
     def has(self, key: str) -> bool:
-        return not self._is_expired(key)
+        with self._lock:
+            return not self._is_expired(key)
 
     def clear(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
 
 # ---------------------------------------------------------------------------

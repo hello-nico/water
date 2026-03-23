@@ -58,7 +58,7 @@ async def basic_streaming():
     streaming_flow = StreamingFlow(flow, stream_manager)
 
     # Subscribe globally to see all events
-    queue = stream_manager.subscribe()
+    queue = await stream_manager.subscribe()
 
     # Run the flow
     result = await streaming_flow.run({"value": 5})

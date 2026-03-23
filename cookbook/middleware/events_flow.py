@@ -102,7 +102,7 @@ async def main():
     }
 
     # Subscribe before running the flow
-    subscription = emitter.subscribe()
+    subscription = await emitter.subscribe()
     collected_events: List[Dict[str, Any]] = []
 
     async def collect_events():

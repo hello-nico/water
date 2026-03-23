@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 import sqlite3
@@ -168,33 +169,39 @@ class InMemoryStorage(StorageBackend):
     def __init__(self) -> None:
         self._sessions: Dict[str, FlowSession] = {}
         self._task_runs: Dict[str, List[TaskRun]] = {}
+        self._lock = asyncio.Lock()
 
     async def save_session(self, session: FlowSession) -> None:
-        session.updated_at = datetime.now(timezone.utc)
-        self._sessions[session.execution_id] = session
+        async with self._lock:
+            session.updated_at = datetime.now(timezone.utc)
+            self._sessions[session.execution_id] = session
 
     async def get_session(self, execution_id: str) -> Optional[FlowSession]:
-        return self._sessions.get(execution_id)
+        async with self._lock:
+            return self._sessions.get(execution_id)
 
     async def list_sessions(self, flow_id: Optional[str] = None) -> List[FlowSession]:
-        sessions = list(self._sessions.values())
-        if flow_id:
-            sessions = [s for s in sessions if s.flow_id == flow_id]
-        return sessions
+        async with self._lock:
+            sessions = list(self._sessions.values())
+            if flow_id:
+                sessions = [s for s in sessions if s.flow_id == flow_id]
+            return sessions
 
     async def save_task_run(self, task_run: TaskRun) -> None:
-        if task_run.execution_id not in self._task_runs:
-            self._task_runs[task_run.execution_id] = []
-        # Update existing or append
-        runs = self._task_runs[task_run.execution_id]
-        for i, existing in enumerate(runs):
-            if existing.id == task_run.id:
-                runs[i] = task_run
-                return
-        runs.append(task_run)
+        async with self._lock:
+            if task_run.execution_id not in self._task_runs:
+                self._task_runs[task_run.execution_id] = []
+            # Update existing or append
+            runs = self._task_runs[task_run.execution_id]
+            for i, existing in enumerate(runs):
+                if existing.id == task_run.id:
+                    runs[i] = task_run
+                    return
+            runs.append(task_run)
 
     async def get_task_runs(self, execution_id: str) -> List[TaskRun]:
-        return list(self._task_runs.get(execution_id, []))
+        async with self._lock:
+            return list(self._task_runs.get(execution_id, []))
 
 
 class SQLiteStorage(StorageBackend):

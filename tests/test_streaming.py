@@ -81,7 +81,7 @@ async def test_stream_event_creation():
 async def test_stream_manager_subscribe():
     """Subscriber receives events for its execution_id."""
     sm = StreamManager()
-    queue = sm.subscribe("exec1")
+    queue = await sm.subscribe("exec1")
 
     event = StreamEvent(event_type="task_start", flow_id="f", execution_id="exec1")
     await sm.emit(event)
@@ -95,8 +95,8 @@ async def test_stream_manager_subscribe():
 async def test_stream_manager_execution_filter():
     """Subscriber only gets events for their execution."""
     sm = StreamManager()
-    q1 = sm.subscribe("exec1")
-    q2 = sm.subscribe("exec2")
+    q1 = await sm.subscribe("exec1")
+    q2 = await sm.subscribe("exec2")
 
     event = StreamEvent(event_type="task_start", flow_id="f", execution_id="exec1")
     await sm.emit(event)
@@ -111,7 +111,7 @@ async def test_stream_manager_execution_filter():
 async def test_stream_manager_global_subscribe():
     """Global subscriber gets events for all executions."""
     sm = StreamManager()
-    global_q = sm.subscribe()  # no execution_id => global
+    global_q = await sm.subscribe()  # no execution_id => global
 
     e1 = StreamEvent(event_type="flow_start", flow_id="f", execution_id="exec1")
     e2 = StreamEvent(event_type="flow_start", flow_id="f", execution_id="exec2")
@@ -128,7 +128,7 @@ async def test_stream_manager_global_subscribe():
 async def test_stream_manager_unsubscribe():
     """Unsubscribed queue stops receiving events."""
     sm = StreamManager()
-    queue = sm.subscribe("exec1")
+    queue = await sm.subscribe("exec1")
 
     # Emit one event, should arrive
     await sm.emit(StreamEvent(event_type="task_start", flow_id="f", execution_id="exec1"))
@@ -136,7 +136,7 @@ async def test_stream_manager_unsubscribe():
     assert received is not None
 
     # Unsubscribe
-    sm.unsubscribe(queue, "exec1")
+    await sm.unsubscribe(queue, "exec1")
 
     # Emit another event, should NOT arrive
     await sm.emit(StreamEvent(event_type="task_complete", flow_id="f", execution_id="exec1"))
@@ -147,9 +147,9 @@ async def test_stream_manager_unsubscribe():
 async def test_stream_manager_multiple_subscribers():
     """Multiple subscribers all receive the same event."""
     sm = StreamManager()
-    q1 = sm.subscribe("exec1")
-    q2 = sm.subscribe("exec1")
-    q_global = sm.subscribe()
+    q1 = await sm.subscribe("exec1")
+    q2 = await sm.subscribe("exec1")
+    q_global = await sm.subscribe()
 
     event = StreamEvent(event_type="task_start", flow_id="f", execution_id="exec1")
     await sm.emit(event)
@@ -200,7 +200,7 @@ async def test_streaming_flow_emits_events():
     flow = _make_flow()
     sf = StreamingFlow(flow, sm)
 
-    global_q = sm.subscribe()
+    global_q = await sm.subscribe()
 
     result = await sf.run({"value": 10})
     assert result["value"] == 11
@@ -240,7 +240,7 @@ async def test_streaming_flow_error_event():
     flow = _make_flow(task=_make_failing_task())
     sf = StreamingFlow(flow, sm)
 
-    global_q = sm.subscribe()
+    global_q = await sm.subscribe()
 
     with pytest.raises(RuntimeError, match="task exploded"):
         await sf.run({"value": 1})
