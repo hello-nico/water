@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 
 from water.core.task import Task
+from water.tasks.http import _validate_url
 
 
 class WebhookInput(BaseModel):
@@ -33,6 +34,7 @@ def webhook_task(
     headers: Optional[Dict[str, str]] = None,
     timeout: float = 10.0,
     description: Optional[str] = None,
+    allow_private_ips: bool = False,
 ) -> Task:
     """
     Create a webhook notification task (POST).
@@ -59,6 +61,8 @@ def webhook_task(
 
         if not webhook_url:
             return {"status_code": 0, "success": False, "error": "No URL provided"}
+
+        _validate_url(webhook_url, allow_private_ips=allow_private_ips)
 
         body = json.dumps(data).encode()
         req = urllib.request.Request(

@@ -27,11 +27,34 @@ class FileOutput(BaseModel):
     success: bool = True
 
 
+def _validate_path(file_path: str, allowed_base_dir: Optional[str]) -> None:
+    """
+    Validate a file path against an allowed base directory.
+
+    Args:
+        file_path: The file path to validate.
+        allowed_base_dir: If set, the resolved file path must be under this directory.
+
+    Raises:
+        ValueError: If path traversal is detected.
+    """
+    if allowed_base_dir is not None:
+        resolved_base = Path(allowed_base_dir).resolve()
+        resolved_path = Path(file_path).resolve()
+        if not str(resolved_path).startswith(str(resolved_base) + "/") and resolved_path != resolved_base:
+            raise ValueError("Path traversal detected")
+    else:
+        logger.warning(
+            "File task is running without path restrictions (allowed_base_dir is not set)."
+        )
+
+
 def file_read(
     id: str,
     path: str = "",
     encoding: str = "utf-8",
     parse_json: bool = False,
+    allowed_base_dir: Optional[str] = None,
     description: Optional[str] = None,
 ) -> Task:
     """
@@ -50,6 +73,8 @@ def file_read(
     def execute(params: dict, context: Any) -> dict:
         data = params.get("input_data", params)
         file_path = path.format(**data) if path else data.get("path", "")
+
+        _validate_path(file_path, allowed_base_dir)
 
         p = Path(file_path)
         if not p.exists():
@@ -81,6 +106,7 @@ def file_write(
     path: str = "",
     content: str = "",
     encoding: str = "utf-8",
+    allowed_base_dir: Optional[str] = None,
     description: Optional[str] = None,
 ) -> Task:
     """
@@ -100,6 +126,8 @@ def file_write(
         data = params.get("input_data", params)
         file_path = path.format(**data) if path else data.get("path", "")
         file_content = content.format(**data) if content else data.get("content", "")
+
+        _validate_path(file_path, allowed_base_dir)
 
         p = Path(file_path)
         p.parent.mkdir(parents=True, exist_ok=True)

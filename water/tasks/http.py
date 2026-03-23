@@ -4,7 +4,10 @@ HTTP request task for Water.
 Pre-built task for making HTTP requests with retry, auth, and response parsing.
 """
 
+import ipaddress
 import json
+import socket
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Any, Dict, Optional
@@ -12,6 +15,46 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel
 
 from water.core.task import Task
+
+
+def _validate_url(url: str, allow_private_ips: bool = False) -> None:
+    """
+    Validate a URL to prevent SSRF attacks.
+
+    Checks that the scheme is http/https and that the resolved IP address
+    is not in a private, reserved, loopback, or link-local range.
+
+    Args:
+        url: The URL to validate.
+        allow_private_ips: If True, skip the private-IP check (for internal use).
+
+    Raises:
+        ValueError: If the URL is blocked.
+    """
+    parsed = urllib.parse.urlparse(url)
+
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"URL scheme '{parsed.scheme}' is not allowed. Only http and https are permitted."
+        )
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL has no hostname.")
+
+    if not allow_private_ips:
+        try:
+            addrinfos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror as e:
+            raise ValueError(f"Could not resolve hostname '{hostname}': {e}")
+
+        for family, _type, _proto, _canonname, sockaddr in addrinfos:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
+                raise ValueError(
+                    f"URL resolves to blocked IP address {ip}. "
+                    "Requests to private/reserved networks are not allowed."
+                )
 
 
 class HttpInput(BaseModel):
@@ -38,6 +81,7 @@ def http_request(
     retry_delay: float = 1.0,
     timeout: Optional[float] = 30.0,
     description: Optional[str] = None,
+    allow_private_ips: bool = False,
 ) -> Task:
     """
     Create an HTTP request task.
@@ -72,6 +116,8 @@ def http_request(
 
         if not req_url:
             return {"status_code": 0, "body": "", "headers": {}, "error": "No URL provided"}
+
+        _validate_url(req_url, allow_private_ips=allow_private_ips)
 
         req = urllib.request.Request(
             req_url,

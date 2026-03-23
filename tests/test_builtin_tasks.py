@@ -22,6 +22,11 @@ def _ctx():
     return MagicMock()
 
 
+def _fake_public_getaddrinfo(host, port, *args, **kwargs):
+    """Return a fake public IP so SSRF validation passes in unit tests."""
+    return [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+
 # ============================================================================
 # HTTP task — water/tasks/http.py
 # ============================================================================
@@ -32,7 +37,8 @@ class TestHttpRequest:
         task = http_request(id="fetch", url="https://example.com")
         assert task.id == "fetch"
 
-    def test_url_templating(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_url_templating(self, mock_gai):
         task = http_request(id="t", url="https://api.example.com/users/{user_id}")
         # We'll mock urlopen to capture the request
         with patch("water.tasks.http.urllib.request.urlopen") as mock_open:
@@ -58,7 +64,8 @@ class TestHttpRequest:
         assert result["status_code"] == 0
         assert "error" in result
 
-    def test_json_response_parsed(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_json_response_parsed(self, mock_gai):
         task = http_request(id="t", url="https://example.com")
         with patch("water.tasks.http.urllib.request.urlopen") as mock_open:
             mock_resp = MagicMock()
@@ -72,7 +79,8 @@ class TestHttpRequest:
             result = task.execute({"input_data": {}}, _ctx())
             assert result["json_data"] == {"key": "val"}
 
-    def test_http_error_returns_status(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_http_error_returns_status(self, mock_gai):
         import urllib.error
         task = http_request(id="t", url="https://example.com")
         with patch("water.tasks.http.urllib.request.urlopen") as mock_open:
@@ -87,7 +95,8 @@ class TestHttpRequest:
             result = task.execute({"input_data": {}}, _ctx())
             assert result["status_code"] == 404
 
-    def test_url_error_raises_connection_error(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_url_error_raises_connection_error(self, mock_gai):
         import urllib.error
         task = http_request(id="t", url="https://example.com")
         with patch("water.tasks.http.urllib.request.urlopen") as mock_open:
@@ -95,7 +104,8 @@ class TestHttpRequest:
             with pytest.raises(ConnectionError, match="HTTP request failed"):
                 task.execute({"input_data": {}}, _ctx())
 
-    def test_header_templating(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_header_templating(self, mock_gai):
         task = http_request(
             id="t",
             url="https://example.com",
@@ -236,7 +246,8 @@ class TestWebhookTask:
         assert result["success"] is False
         assert "error" in result
 
-    def test_successful_post(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_successful_post(self, mock_gai):
         task = webhook_task(id="wh", url="https://hooks.example.com/notify")
         with patch("water.tasks.notify.urllib.request.urlopen") as mock_open:
             mock_resp = MagicMock()
@@ -254,7 +265,8 @@ class TestWebhookTask:
             assert req.method == "POST"
             assert req.get_header("Content-type") == "application/json"
 
-    def test_http_error_returns_failure(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_http_error_returns_failure(self, mock_gai):
         import urllib.error
         task = webhook_task(id="wh", url="https://hooks.example.com/fail")
         with patch("water.tasks.notify.urllib.request.urlopen") as mock_open:
@@ -266,7 +278,8 @@ class TestWebhookTask:
             assert result["success"] is False
             assert result["status_code"] == 500
 
-    def test_url_error_returns_failure(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_url_error_returns_failure(self, mock_gai):
         import urllib.error
         task = webhook_task(id="wh", url="https://hooks.example.com")
         with patch("water.tasks.notify.urllib.request.urlopen") as mock_open:
@@ -275,7 +288,8 @@ class TestWebhookTask:
             assert result["success"] is False
             assert result["status_code"] == 0
 
-    def test_url_templating(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_url_templating(self, mock_gai):
         task = webhook_task(id="wh", url="https://hooks.example.com/{channel}")
         with patch("water.tasks.notify.urllib.request.urlopen") as mock_open:
             mock_resp = MagicMock()
@@ -288,7 +302,8 @@ class TestWebhookTask:
             req = mock_open.call_args[0][0]
             assert "general" in req.full_url
 
-    def test_custom_headers_merged(self):
+    @patch("water.tasks.http.socket.getaddrinfo", side_effect=_fake_public_getaddrinfo)
+    def test_custom_headers_merged(self, mock_gai):
         task = webhook_task(
             id="wh",
             url="https://hooks.example.com",
