@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional, Type
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from datetime import datetime, timezone
 
@@ -63,13 +63,28 @@ class FlowServer:
             uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
     """
 
-    def __init__(self, flows: List[Flow], storage: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        flows: List[Flow],
+        storage: Optional[Any] = None,
+        api_key: Optional[str] = None,
+        allow_origins: Optional[List[str]] = None,
+        allow_credentials: bool = False,
+        allow_methods: Optional[List[str]] = None,
+        allow_headers: Optional[List[str]] = None,
+    ) -> None:
         """
         Initialize FlowServer with a list of flows.
 
         Args:
             flows: List of registered Flow instances
             storage: Optional storage backend for dashboard functionality
+            api_key: Optional API key for authentication. When set, requests
+                must include Authorization: Bearer <key> or X-API-Key: <key>.
+            allow_origins: CORS allowed origins. Defaults to [] (no CORS).
+            allow_credentials: CORS allow credentials. Defaults to False.
+            allow_methods: CORS allowed methods. Defaults to ["GET", "POST"].
+            allow_headers: CORS allowed headers. Defaults to [].
 
         Raises:
             ValueError: If flows contain duplicates or unregistered flows
@@ -83,6 +98,11 @@ class FlowServer:
             self.flows[flow.id] = flow
 
         self.dashboard = FlowDashboard(storage) if storage else None
+        self.api_key = api_key
+        self.allow_origins = allow_origins if allow_origins is not None else []
+        self.allow_credentials = allow_credentials
+        self.allow_methods = allow_methods if allow_methods is not None else ["GET", "POST"]
+        self.allow_headers = allow_headers if allow_headers is not None else []
 
     def _serialize_schema(self, schema_class: Type[BaseModel]) -> Optional[Dict[str, str]]:
         """
@@ -184,6 +204,9 @@ class FlowServer:
 
         return task_infos
 
+    # Paths excluded from API key authentication
+    _AUTH_EXCLUDED_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+
     def get_app(self) -> FastAPI:
         """
         Create and configure the FastAPI application.
@@ -197,15 +220,42 @@ class FlowServer:
             version="1.0.0"
         )
 
-        # Add CORS middleware for development
+        # Add CORS middleware with configurable origins (default: restrictive)
         from fastapi.middleware.cors import CORSMiddleware
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_origins=self.allow_origins,
+            allow_credentials=self.allow_credentials,
+            allow_methods=self.allow_methods,
+            allow_headers=self.allow_headers,
         )
+
+        # Add API key authentication middleware when configured
+        if self.api_key is not None:
+            api_key = self.api_key
+            excluded_paths = self._AUTH_EXCLUDED_PATHS
+
+            @app.middleware("http")
+            async def api_key_auth(request: Request, call_next):
+                if request.url.path in excluded_paths:
+                    return await call_next(request)
+
+                # Check Authorization: Bearer <key>
+                auth_header = request.headers.get("authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:]
+                    if token == api_key:
+                        return await call_next(request)
+
+                # Check X-API-Key header
+                x_api_key = request.headers.get("x-api-key", "")
+                if x_api_key == api_key:
+                    return await call_next(request)
+
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unauthorized"},
+                )
 
         @app.get("/health")
         async def health_check():
@@ -270,12 +320,10 @@ class FlowServer:
                 )
 
             except Exception as e:
+                logger.exception("Flow execution failed: flow_id=%s", flow_id)
                 raise HTTPException(
                     status_code=500,
-                    detail={
-                        "error": str(e),
-                        "flow_id": flow_id
-                    }
+                    detail="Flow execution failed"
                 )
 
         # Dashboard routes (only if storage was provided)
