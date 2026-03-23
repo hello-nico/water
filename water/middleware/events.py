@@ -48,16 +48,18 @@ class EventEmitter:
     def __init__(self) -> None:
         self._queues: List[asyncio.Queue] = []
         self._closed = False
+        self._lock = asyncio.Lock()
 
     async def emit(self, event: FlowEvent) -> None:
         """Push an event to all subscribers."""
-        for queue in self._queues:
-            try:
-                queue.put_nowait(event)
-            except asyncio.QueueFull:
-                logger.warning(f"Event queue full, dropping event: {event}")
+        async with self._lock:
+            for queue in self._queues:
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    logger.warning(f"Event queue full, dropping event: {event}")
 
-    def subscribe(self, max_queue_size: int = 1000) -> "EventSubscription":
+    async def subscribe(self, max_queue_size: int = 1000) -> "EventSubscription":
         """
         Create a new subscription to receive events.
 
@@ -65,23 +67,28 @@ class EventEmitter:
             An async iterable of FlowEvent objects.
         """
         queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
-        self._queues.append(queue)
+        async with self._lock:
+            self._queues.append(queue)
         return EventSubscription(queue, self)
 
-    def _unsubscribe(self, queue: asyncio.Queue) -> None:
+    async def _unsubscribe(self, queue: asyncio.Queue) -> None:
         """Remove a subscriber queue."""
-        if queue in self._queues:
-            self._queues.remove(queue)
+        async with self._lock:
+            try:
+                self._queues.remove(queue)
+            except ValueError:
+                pass
 
     async def close(self) -> None:
         """Signal all subscribers that no more events will be emitted."""
-        self._closed = True
-        sentinel = None
-        for queue in self._queues:
-            try:
-                queue.put_nowait(sentinel)
-            except asyncio.QueueFull:
-                pass
+        async with self._lock:
+            self._closed = True
+            sentinel = None
+            for queue in self._queues:
+                try:
+                    queue.put_nowait(sentinel)
+                except asyncio.QueueFull:
+                    pass
 
     @property
     def subscriber_count(self) -> int:
@@ -103,7 +110,7 @@ class EventSubscription:
                     break
                 yield event
         finally:
-            self._emitter._unsubscribe(self._queue)
+            await self._emitter._unsubscribe(self._queue)
 
     async def get(self, timeout: Optional[float] = None) -> Optional[FlowEvent]:
         """Get the next event, optionally with a timeout."""
@@ -114,6 +121,6 @@ class EventSubscription:
         except asyncio.TimeoutError:
             return None
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Unsubscribe from further events."""
-        self._emitter._unsubscribe(self._queue)
+        await self._emitter._unsubscribe(self._queue)

@@ -7,6 +7,7 @@ expensive task executions can be skipped when the same input is seen again.
 
 import hashlib
 import json
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -51,6 +52,7 @@ class InMemoryCache(TaskCache):
         self.max_size = max_size
         # _store maps key -> (value, expire_at | None)
         self._store: OrderedDict[str, Tuple[Any, Optional[float]]] = OrderedDict()
+        self._lock = threading.Lock()
 
     # -- internal helpers --------------------------------------------------
 
@@ -67,30 +69,34 @@ class InMemoryCache(TaskCache):
     # -- public API --------------------------------------------------------
 
     def get(self, key: str) -> Optional[Any]:
-        if self._is_expired(key):
-            return None
-        # Mark as recently used
-        self._store.move_to_end(key)
-        value, _ = self._store[key]
-        return value
+        with self._lock:
+            if self._is_expired(key):
+                return None
+            # Mark as recently used
+            self._store.move_to_end(key)
+            value, _ = self._store[key]
+            return value
 
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
-        expire_at = (time.monotonic() + ttl) if ttl is not None else None
-        # If key already exists, remove it first so it moves to end
-        if key in self._store:
-            del self._store[key]
-        self._store[key] = (value, expire_at)
-        # Enforce max_size
-        if len(self._store) > self.max_size:
-            self.cleanup()
-        while len(self._store) > self.max_size:
-            self._store.popitem(last=False)
+        with self._lock:
+            expire_at = (time.monotonic() + ttl) if ttl is not None else None
+            # If key already exists, remove it first so it moves to end
+            if key in self._store:
+                del self._store[key]
+            self._store[key] = (value, expire_at)
+            # Enforce max_size
+            if len(self._store) > self.max_size:
+                self.cleanup()
+            while len(self._store) > self.max_size:
+                self._store.popitem(last=False)
 
     def has(self, key: str) -> bool:
-        return not self._is_expired(key)
+        with self._lock:
+            return not self._is_expired(key)
 
     def clear(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
     def cleanup(self) -> None:
         """Remove all expired entries from the cache."""

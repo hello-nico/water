@@ -56,10 +56,11 @@ class StreamManager:
             )
         self._subscribers: Dict[str, List[asyncio.Queue]] = {}  # execution_id -> queues
         self._global_subscribers: List[asyncio.Queue] = []
+        self._lock = asyncio.Lock()
         self.max_queue_size = max_queue_size
         self.drop_policy = drop_policy
 
-    def subscribe(self, execution_id: Optional[str] = None) -> asyncio.Queue:
+    async def subscribe(self, execution_id: Optional[str] = None) -> asyncio.Queue:
         """Subscribe to events for a specific execution or all executions.
 
         Args:
@@ -70,36 +71,38 @@ class StreamManager:
             An asyncio.Queue that will receive StreamEvent instances.
         """
         queue: asyncio.Queue = asyncio.Queue(maxsize=self.max_queue_size)
-        if execution_id is None:
-            self._global_subscribers.append(queue)
-        else:
-            if execution_id not in self._subscribers:
-                self._subscribers[execution_id] = []
-            self._subscribers[execution_id].append(queue)
+        async with self._lock:
+            if execution_id is None:
+                self._global_subscribers.append(queue)
+            else:
+                if execution_id not in self._subscribers:
+                    self._subscribers[execution_id] = []
+                self._subscribers[execution_id].append(queue)
         return queue
 
-    def unsubscribe(self, queue: asyncio.Queue, execution_id: Optional[str] = None) -> None:
+    async def unsubscribe(self, queue: asyncio.Queue, execution_id: Optional[str] = None) -> None:
         """Unsubscribe a queue from events.
 
         Args:
             queue: The queue to remove.
             execution_id: The execution_id it was subscribed to, or None for global.
         """
-        if execution_id is None:
-            try:
-                self._global_subscribers.remove(queue)
-            except ValueError:
-                logger.debug("Attempted to unsubscribe a queue that was not in global subscribers")
-                pass
-        else:
-            queues = self._subscribers.get(execution_id, [])
-            try:
-                queues.remove(queue)
-            except ValueError:
-                logger.debug("Attempted to unsubscribe a queue not found for execution_id '%s'", execution_id)
-                pass
-            if not queues and execution_id in self._subscribers:
-                del self._subscribers[execution_id]
+        async with self._lock:
+            if execution_id is None:
+                try:
+                    self._global_subscribers.remove(queue)
+                except ValueError:
+                    logger.debug("Attempted to unsubscribe a queue that was not in global subscribers")
+                    pass
+            else:
+                queues = self._subscribers.get(execution_id, [])
+                try:
+                    queues.remove(queue)
+                except ValueError:
+                    logger.debug("Attempted to unsubscribe a queue not found for execution_id '%s'", execution_id)
+                    pass
+                if not queues and execution_id in self._subscribers:
+                    del self._subscribers[execution_id]
 
     async def emit(self, event: StreamEvent) -> None:
         """Emit an event to all relevant subscribers.
@@ -110,12 +113,16 @@ class StreamManager:
         Args:
             event: The StreamEvent to broadcast.
         """
+        async with self._lock:
+            exec_queues = list(self._subscribers.get(event.execution_id, []))
+            global_queues = list(self._global_subscribers)
+
         # Send to execution-specific subscribers
-        for queue in self._subscribers.get(event.execution_id, []):
+        for queue in exec_queues:
             self._enqueue(queue, event, execution_id=event.execution_id)
 
         # Send to global subscribers
-        for queue in self._global_subscribers:
+        for queue in global_queues:
             self._enqueue(queue, event, execution_id=None)
 
     def _enqueue(self, queue: asyncio.Queue, event: StreamEvent, execution_id: Optional[str] = None) -> None:
@@ -173,7 +180,7 @@ class StreamManager:
         Yields:
             StreamEvent instances as they arrive.
         """
-        queue = self.subscribe(execution_id)
+        queue = await self.subscribe(execution_id)
         try:
             while True:
                 event = await queue.get()
@@ -183,7 +190,7 @@ class StreamManager:
                     if execution_id is not None:
                         break
         finally:
-            self.unsubscribe(queue, execution_id)
+            await self.unsubscribe(queue, execution_id)
 
     def format_sse(self, event: StreamEvent) -> str:
         """Format event as an SSE string.
@@ -298,7 +305,7 @@ class StreamingFlow:
         self._wire_hooks()
 
         collected: List[StreamEvent] = []
-        queue = self.stream.subscribe(self._execution_id)
+        queue = await self.stream.subscribe(self._execution_id)
 
         async def collect_events() -> None:
             while True:
@@ -330,7 +337,7 @@ class StreamingFlow:
 
             return result_holder[0], collected
         finally:
-            self.stream.unsubscribe(queue, self._execution_id)
+            await self.stream.unsubscribe(queue, self._execution_id)
 
 
 def _safe_serialize(data: Any) -> Any:
@@ -358,7 +365,7 @@ def add_streaming_routes(app: Any, stream_manager: StreamManager) -> None:
     from starlette.responses import StreamingResponse
 
     async def _sse_generator(execution_id: Optional[str] = None) -> AsyncGenerator[str, None]:
-        queue = stream_manager.subscribe(execution_id)
+        queue = await stream_manager.subscribe(execution_id)
         try:
             while True:
                 try:
@@ -371,7 +378,7 @@ def add_streaming_routes(app: Any, stream_manager: StreamManager) -> None:
                     # Send a keep-alive comment
                     yield ": keep-alive\n\n"
         finally:
-            stream_manager.unsubscribe(queue, execution_id)
+            await stream_manager.unsubscribe(queue, execution_id)
 
     @app.get("/api/stream/{execution_id}")
     async def stream_execution(execution_id: str) -> StreamingResponse:
