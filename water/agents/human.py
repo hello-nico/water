@@ -33,39 +33,44 @@ class HumanInputManager:
     def __init__(self) -> None:
         self._pending: Dict[str, asyncio.Future] = {}
         self._prompts: Dict[str, str] = {}
+        self._lock = asyncio.Lock()
 
-    def create_request(self, request_id: str, prompt: str) -> asyncio.Future:
+    async def create_request(self, request_id: str, prompt: str) -> asyncio.Future:
         """Create a pending human input request."""
         loop = asyncio.get_running_loop()
         future = loop.create_future()
-        self._pending[request_id] = future
-        self._prompts[request_id] = prompt
+        async with self._lock:
+            self._pending[request_id] = future
+            self._prompts[request_id] = prompt
         return future
 
-    def provide_input(self, request_id: str, data: Dict[str, Any]) -> None:
+    async def provide_input(self, request_id: str, data: Dict[str, Any]) -> None:
         """Provide human input for a pending request."""
-        future = self._pending.get(request_id)
-        if not future:
-            raise ValueError(f"No pending request with id: {request_id}")
-        if future.done():
-            raise ValueError(f"Request {request_id} already resolved")
-        future.set_result(data)
+        async with self._lock:
+            future = self._pending.get(request_id)
+            if not future:
+                raise ValueError(f"No pending request with id: {request_id}")
+            if future.done():
+                raise ValueError(f"Request {request_id} already resolved")
+            future.set_result(data)
 
-    def get_pending(self) -> Dict[str, str]:
+    async def get_pending(self) -> Dict[str, str]:
         """Get all pending requests as {request_id: prompt}."""
-        return {
-            rid: prompt
-            for rid, prompt in self._prompts.items()
-            if rid in self._pending and not self._pending[rid].done()
-        }
+        async with self._lock:
+            return {
+                rid: prompt
+                for rid, prompt in self._prompts.items()
+                if rid in self._pending and not self._pending[rid].done()
+            }
 
-    def cancel(self, request_id: str) -> None:
+    async def cancel(self, request_id: str) -> None:
         """Cancel a pending request."""
-        future = self._pending.get(request_id)
-        if future and not future.done():
-            future.cancel()
-        self._pending.pop(request_id, None)
-        self._prompts.pop(request_id, None)
+        async with self._lock:
+            future = self._pending.get(request_id)
+            if future and not future.done():
+                future.cancel()
+            self._pending.pop(request_id, None)
+            self._prompts.pop(request_id, None)
 
 
 def create_human_task(
@@ -123,7 +128,7 @@ def create_human_task(
                 request_id=request_id,
             )
 
-        future = manager.create_request(request_id, prompt)
+        future = await manager.create_request(request_id, prompt)
 
         try:
             if timeout:
@@ -131,7 +136,7 @@ def create_human_task(
             else:
                 human_response = await future
         except asyncio.TimeoutError:
-            manager.cancel(request_id)
+            await manager.cancel(request_id)
             raise TimeoutError(
                 f"Human input for task '{context.task_id}' timed out after {timeout}s"
             )

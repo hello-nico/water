@@ -76,6 +76,7 @@ class ApprovalGate:
         self._pending: Dict[str, asyncio.Future] = {}
         self._requests: Dict[str, ApprovalRequest] = {}
         self._auto_approval_count: int = 0
+        self._lock = asyncio.Lock()
 
     async def request_approval(
         self,
@@ -102,29 +103,31 @@ class ApprovalGate:
             data_summary=data_summary,
             created_at=datetime.now(timezone.utc),
         )
-        self._requests[request_id] = request
 
-        # Check auto-approve eligibility
-        can_auto = risk_level <= self.policy.auto_approve_below
-        if can_auto and self.policy.max_auto_approvals is not None:
-            can_auto = self._auto_approval_count < self.policy.max_auto_approvals
+        async with self._lock:
+            self._requests[request_id] = request
 
-        if can_auto:
-            request.status = "approved"
-            request.decided_by = "auto"
-            self._auto_approval_count += 1
-            return request
+            # Check auto-approve eligibility
+            can_auto = risk_level <= self.policy.auto_approve_below
+            if can_auto and self.policy.max_auto_approvals is not None:
+                can_auto = self._auto_approval_count < self.policy.max_auto_approvals
 
-        # Need human approval — create a future and wait
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        self._pending[request_id] = future
+            if can_auto:
+                request.status = "approved"
+                request.decided_by = "auto"
+                self._auto_approval_count += 1
+                return request
+
+            # Need human approval — create a future and wait
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+            self._pending[request_id] = future
 
         try:
             await asyncio.wait_for(future, timeout=self.policy.timeout)
         except asyncio.TimeoutError:
-            # Handle timeout according to policy
-            del self._pending[request_id]
+            async with self._lock:
+                self._pending.pop(request_id, None)
             if self.policy.timeout_action == TimeoutAction.APPROVE:
                 request.status = "approved"
                 request.decided_by = "timeout"
@@ -142,7 +145,8 @@ class ApprovalGate:
                 )
 
         # Future was resolved by approve() or deny()
-        self._pending.pop(request_id, None)
+        async with self._lock:
+            self._pending.pop(request_id, None)
         if request.status == "denied":
             raise ApprovalDenied(request_id, reason=request.reason)
 

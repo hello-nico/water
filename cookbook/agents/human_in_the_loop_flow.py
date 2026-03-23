@@ -97,16 +97,16 @@ expense_flow.then(validate_task).then(approval_task).then(process_task).register
 async def simulate_human_approval(manager: HumanInputManager):
     """Simulate a human providing approval after a short delay."""
     # Wait a moment for the flow to reach the human task
-    while not manager.get_pending():
+    while not await manager.get_pending():
         await asyncio.sleep(0.05)
 
-    pending = manager.get_pending()
+    pending = await manager.get_pending()
     for request_id, prompt in pending.items():
         print(f"\n  [human] Received prompt: '{prompt}'")
         print(f"  [human] Reviewing... (request_id={request_id})")
         await asyncio.sleep(0.5)  # Simulate thinking time
         print("  [human] Approved with notes.\n")
-        manager.provide_input(request_id, {
+        await manager.provide_input(request_id, {
             "approved": True,
             "reviewer_notes": "Looks good. Pre-approved vendor.",
         })

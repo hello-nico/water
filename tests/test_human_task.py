@@ -50,10 +50,10 @@ async def test_human_task_with_manager():
     async def provide_input_later():
         # Wait for the request to appear
         for _ in range(50):
-            pending = manager.get_pending()
+            pending = await manager.get_pending()
             if pending:
                 request_id = list(pending.keys())[0]
-                manager.provide_input(request_id, {"approved": True})
+                await manager.provide_input(request_id, {"approved": True})
                 return
             await asyncio.sleep(0.01)
 
@@ -88,10 +88,10 @@ async def test_human_task_with_transform():
 
     async def provide_input_later():
         for _ in range(50):
-            pending = manager.get_pending()
+            pending = await manager.get_pending()
             if pending:
                 request_id = list(pending.keys())[0]
-                manager.provide_input(request_id, {"multiplier": 3})
+                await manager.provide_input(request_id, {"multiplier": 3})
                 return
             await asyncio.sleep(0.01)
 
@@ -129,16 +129,16 @@ async def test_human_input_manager_provide_invalid():
     """Providing input for a non-existent request raises ValueError."""
     manager = HumanInputManager()
     with pytest.raises(ValueError, match="No pending request"):
-        manager.provide_input("nonexistent", {"data": 1})
+        await manager.provide_input("nonexistent", {"data": 1})
 
 
 @pytest.mark.asyncio
 async def test_human_input_manager_cancel():
     """Cancelling a pending request removes it."""
     manager = HumanInputManager()
-    future = manager.create_request("req1", "test prompt")
-    assert "req1" in manager.get_pending()
+    future = await manager.create_request("req1", "test prompt")
+    assert "req1" in await manager.get_pending()
 
-    manager.cancel("req1")
-    assert "req1" not in manager.get_pending()
+    await manager.cancel("req1")
+    assert "req1" not in await manager.get_pending()
     assert future.cancelled()
