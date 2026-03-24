@@ -99,8 +99,8 @@ async def test_agentic_loop_basic():
 
 
 @pytest.mark.asyncio
-async def test_tool_arguments_stay_as_dicts():
-    """Tool call arguments must be dicts (not JSON strings) in the message history."""
+async def test_tool_arguments_serialized_as_json_strings():
+    """Tool call arguments must be JSON strings in the message history for OpenAI API compatibility."""
     provider = MockToolProvider()
     tool = make_greet_tool()
 
@@ -117,8 +117,9 @@ async def test_tool_arguments_stay_as_dicts():
     second_call_messages = provider.received_messages[1]
     assistant_msg = [m for m in second_call_messages if m["role"] == "assistant"][0]
     tc_args = assistant_msg["tool_calls"][0]["function"]["arguments"]
-    assert isinstance(tc_args, dict), f"Expected dict, got {type(tc_args).__name__}: {tc_args}"
-    assert tc_args == {"name": "World"}
+    assert isinstance(tc_args, str), f"Expected str, got {type(tc_args).__name__}: {tc_args}"
+    import json
+    assert json.loads(tc_args) == {"name": "World"}
 
 
 @pytest.mark.asyncio
