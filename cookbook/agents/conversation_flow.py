@@ -2,19 +2,28 @@
 Cookbook: Multi-Turn Conversation Flow
 ======================================
 
-Demonstrates how to use ConversationManager with a real OpenAI LLM
+Demonstrates how to use ConversationManager with a real LLM
 to build a support bot that preserves dialogue state across turns.
+
+NOTE: Set ANTHROPIC_API_KEY or OPENAI_API_KEY to run this example.
 """
 
 import asyncio
+import os
 
 from water.agents.conversation import ConversationManager, ConversationState
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
+
+
+def _get_provider(temperature=0.7):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 
 
 async def main():
-    # Set up a real OpenAI provider
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.7)
+    # Set up a real LLM provider
+    provider = _get_provider(temperature=0.7)
 
     # Create a conversation manager with a system prompt
     manager = ConversationManager(

@@ -8,19 +8,25 @@ It shows:
   - Using output_parser for structured output
   - A multi-agent flow (planner -> coder -> reviewer pattern)
 
-NOTE: This example uses OpenAIProvider and requires a valid OPENAI_API_KEY
-      environment variable.
+NOTE: Set ANTHROPIC_API_KEY or OPENAI_API_KEY to run this example.
 """
 
 import asyncio
 import json
+import os
 from typing import Dict, Any
 
 from pydantic import BaseModel
 
 from water.core import Flow, create_task
 from water.agents import create_agent_task
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
+
+
+def _get_provider(temperature=0.3):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +67,7 @@ async def simple_agent_example():
     """Create a single agent task and run it in a flow."""
     print("=== Simple Agent Task ===\n")
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
+    provider = _get_provider(temperature=0.3)
 
     class TopicInput(BaseModel):
         topic: str
@@ -90,7 +96,7 @@ async def structured_output_example():
     """Use an output_parser to convert LLM text into structured data."""
     print("=== Structured Output ===\n")
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
+    provider = _get_provider(temperature=0.0)
 
     def parse_plan(text: str) -> dict:
         """Parse the LLM JSON response into a plan dict."""
@@ -143,7 +149,7 @@ async def chained_example():
     """Chain an agent task with a regular Python task."""
     print("=== Agent + Regular Task Chain ===\n")
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
+    provider = _get_provider(temperature=0.3)
 
     class TopicInput(BaseModel):
         topic: str
@@ -198,9 +204,9 @@ async def multi_agent_example():
     """
     print("=== Multi-Agent Flow (Planner -> Coder -> Reviewer) ===\n")
 
-    planner_provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
-    coder_provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
-    reviewer_provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
+    planner_provider = _get_provider(temperature=0.3)
+    coder_provider = _get_provider(temperature=0.3)
+    reviewer_provider = _get_provider(temperature=0.3)
 
     # Agent 1: Planner
     planner = create_agent_task(

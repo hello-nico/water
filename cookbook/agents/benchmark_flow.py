@@ -13,14 +13,20 @@ import json
 import tempfile
 import os
 
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
 from water.bench import BenchmarkRunner, ToolUseBenchmark, InstructionBenchmark
 
 
+def _get_provider(temperature=0.0):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
+
+
 async def main():
-    # --- Set up two real providers with different models ---
-    good_provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
-    bad_provider = OpenAIProvider(model="gpt-4o-mini", temperature=2.0)  # high temp = worse instruction following
+    # --- Set up two real providers with different temperatures ---
+    good_provider = _get_provider(temperature=0.0)
+    bad_provider = _get_provider(temperature=1.0)  # high temp = worse instruction following
 
     # --- Run benchmarks ---
     runner = BenchmarkRunner(

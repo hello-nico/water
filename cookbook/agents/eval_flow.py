@@ -9,17 +9,24 @@ flow output quality against expected results. It shows:
   - LLMJudge with a MockProvider for LLM-based scoring
   - EvalReport for analyzing results and detecting regressions
 
-NOTE: The LLMJudge uses OpenAIProvider and requires a valid OPENAI_API_KEY.
+NOTE: Set ANTHROPIC_API_KEY or OPENAI_API_KEY to run this example.
       The classification flow itself is rule-based (no LLM needed).
 """
 
 import asyncio
+import os
 from typing import Any, Dict
 
 from pydantic import BaseModel
 
 from water.core import Flow, create_task
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
+
+
+def _get_provider(temperature=0.0):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 from water.eval import (
     EvalSuite,
     EvalCase,
@@ -182,7 +189,7 @@ async def example_llm_judge_and_regression():
     flow = build_classify_flow()
 
     # Real OpenAI provider for LLM judge scoring
-    llm_judge_provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
+    llm_judge_provider = _get_provider(temperature=0.0)
 
     cases = [
         EvalCase(

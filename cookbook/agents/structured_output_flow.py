@@ -6,8 +6,7 @@ validated Pydantic model instances from LLM responses.  The LLM is
 instructed to respond in JSON matching the schema, and the output is
 automatically parsed, validated, and retried on failure.
 
-NOTE: This example uses OpenAIProvider and requires a valid OPENAI_API_KEY
-      environment variable.
+NOTE: Set ANTHROPIC_API_KEY or OPENAI_API_KEY to run this example.
 """
 
 import asyncio
@@ -18,7 +17,13 @@ from pydantic import BaseModel
 
 from water.core import Flow
 from water.agents import create_structured_task
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
+
+
+def _get_provider(temperature=0.0):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +43,7 @@ class SentimentResult(BaseModel):
 async def main():
     print("=== Structured Output: Sentiment Analysis ===\n")
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
+    provider = _get_provider(temperature=0.0)
 
     sentiment_task = create_structured_task(
         id="sentiment_analyzer",

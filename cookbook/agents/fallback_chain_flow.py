@@ -12,8 +12,15 @@ Scenarios shown:
 """
 
 import asyncio
+import os
 
-from water.agents.llm import LLMProvider, OpenAIProvider
+from water.agents.llm import LLMProvider, OpenAIProvider, AnthropicProvider
+
+
+def _get_provider(temperature=0.3):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 from water.agents.fallback import FallbackChain
 
 
@@ -37,7 +44,7 @@ async def demo_first_success():
     chain = FallbackChain(
         providers=[
             UnreachableProvider(),          # primary -- always fails
-            OpenAIProvider(model="gpt-4o-mini", temperature=0.3),  # secondary -- real LLM
+            _get_provider(temperature=0.3),  # secondary -- real LLM
         ],
         strategy="first_success",
     )
@@ -62,9 +69,9 @@ async def demo_round_robin():
     print("=== round_robin strategy ===")
     chain = FallbackChain(
         providers=[
-            OpenAIProvider(model="gpt-4o-mini", temperature=0.0),
-            OpenAIProvider(model="gpt-4o-mini", temperature=0.5),
-            OpenAIProvider(model="gpt-4o-mini", temperature=1.0),
+            _get_provider(temperature=0.0),
+            _get_provider(temperature=0.5),
+            _get_provider(temperature=1.0),
         ],
         strategy="round_robin",
     )
@@ -85,7 +92,7 @@ async def demo_metrics():
     chain = FallbackChain(
         providers=[
             UnreachableProvider(),
-            OpenAIProvider(model="gpt-4o-mini", temperature=0.3),
+            _get_provider(temperature=0.3),
         ],
         strategy="first_success",
     )

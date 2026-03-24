@@ -7,14 +7,21 @@ Demonstrates the Water Prompt Templating Engine:
   - Composing multiple templates into one
   - Integrating templates with create_agent_task
 
-NOTE: This example uses OpenAIProvider and requires a valid OPENAI_API_KEY.
+NOTE: Set ANTHROPIC_API_KEY or OPENAI_API_KEY to run this example.
 """
 
 import asyncio
+import os
 from water.agents import create_agent_task
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
 from water.agents.prompts import PromptTemplate, PromptLibrary
 from water.core import Flow, create_task
+
+
+def _get_provider(temperature=0.3):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +138,7 @@ async def agent_task_demo():
     )
 
     # Build a flow with an agent task that uses the rendered prompt
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.3)
+    provider = _get_provider(temperature=0.3)
 
     summarize = create_agent_task(
         id="summarize",

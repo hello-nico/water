@@ -10,16 +10,23 @@ Usage:
 
 import asyncio
 import json
+import os
 
 from pydantic import BaseModel
 
 from water.core.task import Task
-from water.agents.llm import OpenAIProvider
+from water.agents.llm import OpenAIProvider, AnthropicProvider
 from water.agents.planner import (
     PlannerAgent,
     TaskRegistry,
     create_planner_task,
 )
+
+
+def _get_provider(temperature=0.0):
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return AnthropicProvider(model="claude-haiku-4-5-20251001", temperature=temperature)
+    return OpenAIProvider(model="gpt-4o-mini", temperature=temperature)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +104,7 @@ async def demo_planner_agent():
     print("Demo 1: PlannerAgent.plan_and_execute")
     print("=" * 60)
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
+    provider = _get_provider(temperature=0.0)
     registry = build_registry()
     agent = PlannerAgent(provider=provider, task_registry=registry)
 
@@ -120,7 +127,7 @@ async def demo_planner_task():
     print("Demo 2: create_planner_task (composable Task)")
     print("=" * 60)
 
-    provider = OpenAIProvider(model="gpt-4o-mini", temperature=0.0)
+    provider = _get_provider(temperature=0.0)
     registry = build_registry()
 
     planner_task = create_planner_task(
